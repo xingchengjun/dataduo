@@ -21,6 +21,7 @@ interface GameStore extends GameState {
   checkDailyLogin: () => boolean;
   awardXP: (baseXP: number) => { totalXP: number; leveledUp: boolean; newLevel: number };
   loseHeart: () => boolean;
+  earnHeart: () => void;
   refillHearts: () => void;
   completeLesson: (lessonId: string, correct: number, total: number, xp: number) => void;
   getLevelProgress: () => number;
@@ -101,6 +102,15 @@ export const useGameStore = create<GameStore>()(
 
         set(updates as GameState);
         return newHearts > 0;
+      },
+
+      earnHeart: () => {
+        const state = get();
+        if (state.hearts >= state.maxHearts) return;
+        set({
+          hearts: Math.min(state.hearts + 1, state.maxHearts),
+          heartsRefillStart: state.hearts + 1 >= state.maxHearts ? null : state.heartsRefillStart,
+        });
       },
 
       refillHearts: () => {

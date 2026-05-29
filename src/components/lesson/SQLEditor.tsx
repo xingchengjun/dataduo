@@ -58,7 +58,7 @@ export default function SQLEditor({
           disabled={disabled}
           placeholder="在这里输入你的 SQL 查询..."
           className="
-            sql-editor w-full min-h-[120px] p-4 pr-12
+            sql-editor w-full min-h-[120px] md:min-h-[180px] p-4 md:p-5 pr-12
             bg-[#1e1e2e] text-[#cdd6f4]
             border-2 border-[#313244] rounded-2xl
             placeholder:text-[#585b70]

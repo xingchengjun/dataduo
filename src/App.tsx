@@ -7,7 +7,7 @@ import Result from './pages/Result';
 function App() {
   return (
     <HashRouter>
-      <div className="max-w-lg mx-auto min-h-screen bg-white shadow-sm relative">
+      <div className="app-container relative">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/skill-tree" element={<SkillTree />} />

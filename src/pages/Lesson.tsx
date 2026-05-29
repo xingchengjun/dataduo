@@ -99,6 +99,11 @@ export default function Lesson() {
         addXP(totalXP);
         setShowFeedback(true);
 
+        // 答对奖励心形（如果心形不满）
+        if (useGameStore.getState().hearts < useGameStore.getState().maxHearts) {
+          useGameStore.getState().earnHeart();
+        }
+
         // Delay before advancing so user sees the celebration
         setTimeout(() => {
           addCorrect();
@@ -179,6 +184,11 @@ export default function Lesson() {
 
   // ---------- Game over ----------
   if (showGameOver) {
+    const nextRefill = useGameStore.getState().heartsRefillStart
+      ? Math.max(0, 30 * 60 * 1000 - (Date.now() - new Date(useGameStore.getState().heartsRefillStart!).getTime()))
+      : 0;
+    const minutesLeft = Math.ceil(nextRefill / 60000);
+
     return (
       <div className="min-h-screen bg-white px-4 py-6 flex flex-col items-center justify-center">
         <motion.div
@@ -189,11 +199,18 @@ export default function Lesson() {
         >
           <div className="text-6xl mb-4">😢</div>
           <h2 className="text-2xl font-extrabold text-duo-red mb-2">心已用尽</h2>
-          <p className="text-duo-text-secondary mb-2">休息一下，心形会慢慢恢复的。</p>
-          <p className="text-sm text-duo-text-secondary mb-6">30 分钟后恢复 1 颗心</p>
-          <Button variant="primary" size="lg" onClick={() => navigate('/skill-tree')}>
-            返回技能树
-          </Button>
+          <p className="text-duo-text-secondary mb-2">答错会消耗心形，休息一下再战吧</p>
+          <p className="text-sm text-duo-text-secondary mb-6">
+            ⏱ 约 {minutesLeft} 分钟后恢复 1 颗心
+          </p>
+          <div className="space-y-3">
+            <Button variant="primary" size="lg" fullWidth onClick={() => { useGameStore.getState().refillHearts(); navigate('/skill-tree'); }}>
+              返回技能树
+            </Button>
+            <Button variant="ghost" size="md" fullWidth onClick={() => navigate('/')}>
+              返回首页
+            </Button>
+          </div>
         </motion.div>
       </div>
     );
@@ -208,17 +225,17 @@ export default function Lesson() {
       <div className="min-h-screen bg-white pb-8">
         {/* Top Bar */}
         <div className="sticky top-0 bg-white z-10 border-b border-duo-surface-dark">
-          <div className="px-4 py-3 flex items-center justify-between">
+          <div className="px-4 md:px-6 py-3 flex items-center justify-between">
             <button onClick={() => navigate('/skill-tree')} className="text-2xl cursor-pointer">✕</button>
             <div className="text-center">
-              <p className="font-bold text-sm text-duo-text">{nodeInfo?.node.title}</p>
-              <p className="text-xs text-duo-text-secondary">先学习知识点，再做题巩固</p>
+              <p className="font-bold text-sm md:text-base text-duo-text">{nodeInfo?.node.title}</p>
+              <p className="text-xs md:text-sm text-duo-text-secondary">先学习知识点，再做题巩固</p>
             </div>
             <Hearts hearts={hearts} maxHearts={maxHearts} size="sm" />
           </div>
         </div>
 
-        <div className="pt-2">
+        <div className="pt-2 md:pt-4 md:max-w-2xl md:mx-auto">
           <ConceptCards cards={teachingCards} onComplete={handleLearnComplete} />
         </div>
       </div>
@@ -256,21 +273,21 @@ export default function Lesson() {
   const questionNumber = answeredCount + 1;
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-24 md:pb-8">
       {/* Top Bar */}
       <div className="sticky top-0 bg-white z-10 border-b border-duo-surface-dark">
-        <div className="px-4 py-3">
+        <div className="px-4 md:px-6 py-3">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => navigate('/skill-tree')} className="text-2xl cursor-pointer">✕</button>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-duo-text-secondary font-medium bg-duo-surface px-2 py-1 rounded-lg">
+              <span className="text-xs md:text-sm text-duo-text-secondary font-medium bg-duo-surface px-2 py-1 rounded-lg">
                 📝 答题
               </span>
               <Hearts hearts={hearts} maxHearts={maxHearts} />
             </div>
           </div>
           {/* Progress bar */}
-          <div className="w-full h-2 bg-duo-surface-dark rounded-full overflow-hidden">
+          <div className="w-full h-2 md:h-3 bg-duo-surface-dark rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-duo-green rounded-full"
               initial={{ width: 0 }}
@@ -279,108 +296,116 @@ export default function Lesson() {
             />
           </div>
           <div className="flex justify-between mt-1">
-            <span className="text-xs text-duo-text-secondary">
+            <span className="text-xs md:text-sm text-duo-text-secondary">
               {currentQuestion.difficulty === 'easy' ? '🟢 简单' : currentQuestion.difficulty === 'medium' ? '🟡 中等' : '🔴 困难'}
             </span>
-            <span className="text-xs font-bold text-duo-text-secondary">
+            <span className="text-xs md:text-sm font-bold text-duo-text-secondary">
               {questionNumber} / {totalQuestions}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Question Content */}
-      <div className="px-4 pt-4">
-        <motion.div
-          key={currentQuestion.id}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-        >
-          {/* Question Card */}
-          <Card padding="lg" className="mb-4">
-            <h2 className="text-lg font-extrabold text-duo-text mb-2">
-              {currentQuestion.title}
-            </h2>
-            <p className="text-sm text-duo-text leading-relaxed mb-3">
-              {currentQuestion.description}
-            </p>
-            {currentQuestion.tableSchema && (
-              <div className="bg-duo-surface rounded-xl p-3 font-mono text-xs text-duo-text-secondary">
-                <span className="font-bold text-duo-blue">表结构：</span>
-                {currentQuestion.tableSchema}
-              </div>
-            )}
-          </Card>
+      {/* Question Content - 桌面端并排 */}
+      <div className="px-4 md:px-6 pt-4 md:pt-6">
+        <div className="lesson-quiz-layout">
+          {/* 左列：题目 + 编辑器 */}
+          <div className="editor-column">
+            <motion.div
+              key={currentQuestion.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              {/* Question Card */}
+              <Card padding="lg" className="mb-4">
+                <h2 className="text-lg md:text-xl font-extrabold text-duo-text mb-2">
+                  {currentQuestion.title}
+                </h2>
+                <p className="text-sm md:text-base text-duo-text leading-relaxed mb-3">
+                  {currentQuestion.description}
+                </p>
+                {currentQuestion.tableSchema && (
+                  <div className="bg-duo-surface rounded-xl p-3 font-mono text-xs md:text-sm text-duo-text-secondary overflow-x-auto">
+                    <span className="font-bold text-duo-blue">表结构：</span>
+                    {currentQuestion.tableSchema}
+                  </div>
+                )}
+              </Card>
 
-          {/* SQL Editor */}
-          <div className="mb-4">
-            <SQLEditor
-              value={userSQL}
-              onChange={setUserSQL}
-              onSubmit={handleRunSQL}
-              disabled={answered || hearts <= 0}
-              loading={isRunning}
-            />
+              {/* SQL Editor */}
+              <div className="mb-4">
+                <SQLEditor
+                  value={userSQL}
+                  onChange={setUserSQL}
+                  onSubmit={handleRunSQL}
+                  disabled={answered || hearts <= 0}
+                  loading={isRunning}
+                />
+              </div>
+
+              {/* Hint */}
+              {!answered && <Hint hints={currentQuestion.hints} />}
+            </motion.div>
           </div>
 
-          {/* Hint */}
-          {!answered && <Hint hints={currentQuestion.hints} />}
+          {/* 右列：结果 + 反馈 */}
+          <div className="result-column">
+            {/* Result */}
+            <AnimatePresence>
+              {result && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-4"
+                >
+                  <SQLResult result={result} />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-          {/* Result */}
-          <AnimatePresence>
-            {result && (
+            {/* Correct Answer Reveal */}
+            {answered && !isCorrect && (
               <motion.div
+                className="bg-duo-surface rounded-2xl p-4 md:p-5 mb-4"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="mb-4"
               >
-                <SQLResult result={result} />
+                <h4 className="font-bold text-sm md:text-base text-duo-text mb-2">💡 参考答案</h4>
+                <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-3 md:p-4 rounded-xl text-sm font-mono overflow-x-auto leading-relaxed">
+                  {currentQuestion.expectedSQL}
+                </pre>
+                <p className="text-xs md:text-sm text-duo-text-secondary mt-2 leading-relaxed">
+                  {currentQuestion.explanation}
+                </p>
               </motion.div>
             )}
-          </AnimatePresence>
 
-          {/* Correct Answer Reveal */}
-          {answered && !isCorrect && (
-            <motion.div
-              className="bg-duo-surface rounded-2xl p-4 mb-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <h4 className="font-bold text-sm text-duo-text mb-2">💡 参考答案</h4>
-              <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-3 rounded-xl text-sm font-mono overflow-x-auto">
-                {currentQuestion.expectedSQL}
-              </pre>
-              <p className="text-xs text-duo-text-secondary mt-2 leading-relaxed">
-                {currentQuestion.explanation}
-              </p>
-            </motion.div>
-          )}
-
-          {/* Next button */}
-          {answered && (
-            <motion.div
-              className="mt-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Button
-                variant={isCorrect ? 'primary' : 'ghost'}
-                size="lg"
-                fullWidth
-                onClick={handleNext}
+            {/* Next button */}
+            {answered && (
+              <motion.div
+                className="mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
               >
-                {session && session.currentIndex >= session.questions.length
-                  ? '🎉 查看结果'
-                  : isCorrect
-                  ? '✅ 下一题 →'
-                  : '跳过 →'}
-              </Button>
-            </motion.div>
-          )}
-        </motion.div>
+                <Button
+                  variant={isCorrect ? 'primary' : 'ghost'}
+                  size="lg"
+                  fullWidth
+                  onClick={handleNext}
+                >
+                  {session && session.currentIndex >= session.questions.length
+                    ? '🎉 查看结果'
+                    : isCorrect
+                    ? '✅ 下一题 →'
+                    : '跳过 →'}
+                </Button>
+              </motion.div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

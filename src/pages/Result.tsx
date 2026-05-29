@@ -15,7 +15,7 @@ export default function Result() {
   const { nodeId } = useParams();
   const navigate = useNavigate();
   const { session, reset, teachingCards } = useLessonStore();
-  const { hearts, maxHearts, xp, level, completeLesson, getLevelProgress } = useGameStore();
+  const { hearts, maxHearts, xp, level, completeLesson, getLevelProgress, refillHearts } = useGameStore();
 
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [prevLevel, setPrevLevel] = useState(level);
@@ -39,8 +39,9 @@ export default function Result() {
     setPrevLevel(level);
   }, [level]);
 
-  // Save lesson progress
+  // Save lesson progress & refill hearts
   useEffect(() => {
+    refillHearts();
     if (session?.status === 'completed' && nodeId) {
       const allQuestionIds = questions.map((q) => q.id);
       allQuestionIds.forEach((id) => {
@@ -79,25 +80,25 @@ export default function Result() {
   if (showReview && teachingCards.length > 0) {
     const card = teachingCards[reviewIndex];
     return (
-      <div className="min-h-screen bg-white px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="min-h-screen bg-white px-4 md:px-6 py-6">
+        <div className="flex items-center justify-between mb-4 md:mb-6">
           <button onClick={() => setShowReview(false)} className="text-2xl cursor-pointer">← 返回</button>
-          <span className="text-xs text-duo-text-secondary">{reviewIndex + 1} / {teachingCards.length}</span>
+          <span className="text-xs md:text-sm text-duo-text-secondary">{reviewIndex + 1} / {teachingCards.length}</span>
         </div>
-        <div className="bg-white rounded-3xl border-2 border-duo-blue/20 p-5 mb-4">
-          <div className="text-xs font-bold text-duo-blue mb-2 uppercase tracking-wider">知识点回顾</div>
-          <h3 className="text-lg font-extrabold text-duo-text mb-3">{card.title}</h3>
-          <p className="text-sm text-duo-text leading-relaxed whitespace-pre-line mb-4">{card.content}</p>
+        <div className="max-w-2xl mx-auto bg-white rounded-3xl border-2 border-duo-blue/20 p-5 md:p-8 mb-4">
+          <div className="text-xs md:text-sm font-bold text-duo-blue mb-2 uppercase tracking-wider">知识点回顾</div>
+          <h3 className="text-lg md:text-2xl font-extrabold text-duo-text mb-3 md:mb-4">{card.title}</h3>
+          <p className="text-sm md:text-base text-duo-text leading-relaxed whitespace-pre-line mb-4">{card.content}</p>
           {card.example && (
-            <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-3 rounded-xl text-xs font-mono overflow-x-auto mb-3">{card.example}</pre>
+            <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-3 md:p-4 rounded-xl text-xs md:text-sm font-mono overflow-x-auto mb-3 leading-relaxed">{card.example}</pre>
           )}
           {card.highlight && (
-            <div className="bg-duo-orange-light rounded-xl p-3 border border-duo-orange/20">
-              <p className="text-sm font-medium">💡 {card.highlight}</p>
+            <div className="bg-duo-orange-light rounded-xl p-3 md:p-4 border border-duo-orange/20">
+              <p className="text-sm md:text-base font-medium">💡 {card.highlight}</p>
             </div>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 max-w-2xl mx-auto">
           {reviewIndex > 0 && (
             <Button variant="ghost" size="md" onClick={() => setReviewIndex(i => i - 1)}>← 上一个</Button>
           )}
@@ -112,103 +113,113 @@ export default function Result() {
   }
 
   return (
-    <div className="min-h-screen bg-white px-4 py-6">
+    <div className="min-h-screen bg-white px-4 md:px-6 py-6 md:py-8">
       <LevelUpModal show={showLevelUp} level={level} onClose={() => setShowLevelUp(false)} />
 
       {/* Result Card */}
       <motion.div
-        className="text-center mb-6"
+        className="text-center mb-6 md:mb-8"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
         <motion.div
-          className="text-7xl mb-4"
+          className="text-7xl md:text-8xl mb-4"
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
         >
           {accuracy >= 80 ? '🎉' : accuracy >= 60 ? '👍' : '💪'}
         </motion.div>
-        <h1 className={`text-3xl font-extrabold mb-1 ${rating.color}`}>{rating.text}</h1>
-        <p className="text-duo-text-secondary text-sm">
+        <h1 className={`text-3xl md:text-4xl font-extrabold mb-1 ${rating.color}`}>{rating.text}</h1>
+        <p className="text-duo-text-secondary text-sm md:text-base">
           {nodeInfo?.unit.title} — {nodeInfo?.node.title}
         </p>
       </motion.div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      {/* Stats Cards - 桌面端四列 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <motion.div
-          className="bg-duo-surface rounded-2xl p-4 text-center"
+          className="bg-duo-surface rounded-2xl p-4 md:p-5 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className={`text-3xl font-extrabold ${accuracy >= 80 ? 'text-duo-green' : accuracy >= 60 ? 'text-duo-blue' : 'text-duo-orange'}`}>
+          <div className={`text-3xl md:text-4xl font-extrabold ${accuracy >= 80 ? 'text-duo-green' : accuracy >= 60 ? 'text-duo-blue' : 'text-duo-orange'}`}>
             {correctCount}/{totalCount}
           </div>
-          <div className="text-xs text-duo-text-secondary mt-1">
+          <div className="text-xs md:text-sm text-duo-text-secondary mt-1">
             正确率 {accuracy}%
-            {accuracy === 100 ? ' 🏆' : accuracy >= 80 ? ' ✅' : accuracy >= 60 ? ' 👍' : ' 📚'}
           </div>
         </motion.div>
         <motion.div
-          className="bg-duo-surface rounded-2xl p-4 text-center"
+          className="bg-duo-surface rounded-2xl p-4 md:p-5 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <div className="text-3xl font-extrabold text-duo-blue">+{earnedXP}</div>
-          <div className="text-xs text-duo-text-secondary mt-1">
+          <div className="text-3xl md:text-4xl font-extrabold text-duo-blue">+{earnedXP}</div>
+          <div className="text-xs md:text-sm text-duo-text-secondary mt-1">
             获得 XP
-            {useGameStore.getState().streak >= 7 && ' 🔥 连击加成'}
+          </div>
+        </motion.div>
+        <motion.div
+          className="bg-duo-surface rounded-2xl p-4 md:p-5 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <div className="text-3xl md:text-4xl font-extrabold text-duo-red">{hearts}/{maxHearts}</div>
+          <div className="text-xs md:text-sm text-duo-text-secondary mt-1">❤️ 心形</div>
+        </motion.div>
+        <motion.div
+          className="bg-duo-surface rounded-2xl p-4 md:p-5 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <div className="text-lg md:text-xl font-extrabold text-duo-purple">
+            {accuracy >= 80 ? '🏆' : accuracy >= 60 ? '✅' : '📚'}
+          </div>
+          <div className="text-xs md:text-sm text-duo-text-secondary mt-1">
+            {accuracy === 100 ? '完美' : accuracy >= 80 ? '优秀' : accuracy >= 60 ? '良好' : '加油'}
           </div>
         </motion.div>
       </div>
 
-      {/* Heart status */}
-      <motion.div
-        className="bg-duo-surface rounded-2xl p-4 mb-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <span className="font-bold text-sm text-duo-text">剩余心形</span>
-          <Hearts hearts={hearts} maxHearts={maxHearts} />
-        </div>
-      </motion.div>
+      {/* 桌面端：图表 + XP 并排 */}
+      <div className="md:grid md:grid-cols-2 md:gap-4 md:mb-6">
+        {/* XP Progress */}
+        <motion.div
+          className="mb-6 md:mb-0"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <XPBar xp={xp} level={level} progress={progress} animated />
+        </motion.div>
 
-      {/* XP Progress */}
-      <motion.div
-        className="mb-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <XPBar xp={xp} level={level} progress={progress} animated />
-      </motion.div>
-
-      {/* Difficulty breakdown */}
-      <motion.div
-        className="bg-duo-surface rounded-2xl p-4 mb-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35 }}
-      >
-        <h3 className="font-bold text-sm text-duo-text mb-3">题目难度分布</h3>
-        <div className="space-y-2">
-          {(['easy', 'medium', 'hard'] as const).map((diff) => {
-            if (diffCounts[diff] === 0) return null;
-            const labels = { easy: '🟢 简单', medium: '🟡 中等', hard: '🔴 困难' };
-            return (
-              <div key={diff} className="flex items-center justify-between text-sm">
-                <span className="text-duo-text-secondary">{labels[diff]}</span>
-                <span className="font-bold text-duo-text">{diffCounts[diff]} 题</span>
-              </div>
-            );
-          })}
-        </div>
-      </motion.div>
+        {/* Difficulty breakdown */}
+        <motion.div
+          className="bg-duo-surface rounded-2xl p-4 md:p-5"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <h3 className="font-bold text-sm md:text-base text-duo-text mb-3">题目难度分布</h3>
+          <div className="space-y-2">
+            {(['easy', 'medium', 'hard'] as const).map((diff) => {
+              if (diffCounts[diff] === 0) return null;
+              const labels = { easy: '🟢 简单', medium: '🟡 中等', hard: '🔴 困难' };
+              return (
+                <div key={diff} className="flex items-center justify-between text-sm md:text-base">
+                  <span className="text-duo-text-secondary">{labels[diff]}</span>
+                  <span className="font-bold text-duo-text">{diffCounts[diff]} 题</span>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      </div>
 
       {/* Teaching review button */}
       {teachingCards.length > 0 && (
@@ -220,12 +231,12 @@ export default function Result() {
         >
           <button
             onClick={() => setShowReview(true)}
-            className="w-full flex items-center gap-3 bg-duo-blue-light border-2 border-duo-blue/20 rounded-2xl p-4 cursor-pointer hover:bg-blue-50 transition-colors"
+            className="w-full flex items-center gap-3 bg-duo-blue-light border-2 border-duo-blue/20 rounded-2xl p-4 md:p-5 cursor-pointer hover:bg-blue-50 transition-colors"
           >
             <span className="text-2xl">📖</span>
             <div className="text-left">
-              <div className="font-bold text-sm text-duo-text">回顾知识点</div>
-              <div className="text-xs text-duo-text-secondary">再看一遍教学卡片，巩固记忆</div>
+              <div className="font-bold text-sm md:text-base text-duo-text">回顾知识点</div>
+              <div className="text-xs md:text-sm text-duo-text-secondary">再看一遍教学卡片，巩固记忆</div>
             </div>
             <span className="ml-auto text-duo-blue">→</span>
           </button>
@@ -234,23 +245,23 @@ export default function Result() {
 
       {/* Level info */}
       <motion.div
-        className="bg-gradient-to-r from-duo-green-light to-duo-green/5 rounded-2xl p-4 mb-6 border border-duo-green/20"
+        className="bg-gradient-to-r from-duo-green-light to-duo-green/5 rounded-2xl p-4 md:p-5 mb-6 border border-duo-green/20"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
         <div className="flex items-center gap-2 mb-1">
           <span className="text-lg">⭐</span>
-          <span className="font-bold text-sm text-duo-text">等级 {level} · 总经验 {xp} XP</span>
+          <span className="font-bold text-sm md:text-base text-duo-text">等级 {level} · 总经验 {xp} XP</span>
         </div>
-        <p className="text-xs text-duo-text-secondary ml-7">
+        <p className="text-xs md:text-sm text-duo-text-secondary ml-7">
           每 200 XP 升一级，解锁更多挑战！
         </p>
       </motion.div>
 
-      {/* Actions */}
+      {/* Actions - 桌面端横向 */}
       <motion.div
-        className="space-y-3"
+        className="space-y-3 md:flex md:space-y-0 md:gap-3"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45 }}
@@ -258,7 +269,7 @@ export default function Result() {
         <Button variant="primary" size="lg" fullWidth onClick={() => { reset(); navigate('/skill-tree'); }}>
           🚀 继续闯关
         </Button>
-        <Button variant="ghost" size="md" fullWidth onClick={() => navigate('/')}>
+        <Button variant="ghost" size="lg" fullWidth onClick={() => navigate('/')}>
           返回首页
         </Button>
       </motion.div>

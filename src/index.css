@@ -41,6 +41,73 @@ body {
   flex-direction: column;
 }
 
+/* 响应式容器：手机窄屏，桌面宽屏 + 灰底 */
+.app-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 100svh;
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+
+@media (min-width: 768px) {
+  body { background-color: #F0F0F0; }
+  .app-container {
+    max-width: 720px;
+    margin: 0 auto;
+    min-height: 100vh;
+    border-left: 1px solid #E0E0E0;
+    border-right: 1px solid #E0E0E0;
+    box-shadow: 0 0 20px rgba(0,0,0,0.05);
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-container {
+    max-width: 960px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .app-container {
+    max-width: 1100px;
+  }
+}
+
+/* 桌面端答题页：编辑器和结果并排 */
+@media (min-width: 1024px) {
+  .lesson-quiz-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+  .lesson-quiz-layout .editor-column {
+    position: sticky;
+    top: 80px;
+  }
+  .lesson-quiz-layout .result-column {
+    overflow-y: auto;
+    max-height: calc(100vh - 100px);
+  }
+}
+
+/* 桌面端技能树：网格布局 */
+@media (min-width: 1024px) {
+  .skill-tree-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .skill-tree-grid .node-item {
+    padding-left: 2.5rem;
+  }
+  .skill-tree-connecting-line {
+    display: none;
+  }
+}
+
 /* 自定义动画 */
 @keyframes flame-flicker {
   0%, 100% { transform: scaleY(1) translateY(0); opacity: 1; }

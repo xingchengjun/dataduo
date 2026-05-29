@@ -53,9 +53,9 @@ export default function SkillTree() {
   };
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-24 md:pb-12">
       {/* Header */}
-      <div className="px-4 pt-4 pb-2 sticky top-0 bg-white z-10 border-b border-duo-surface-dark">
+      <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2 sticky top-0 bg-white z-10 border-b border-duo-surface-dark">
         <div className="flex items-center justify-between mb-3">
           <button
             onClick={() => navigate('/')}
@@ -65,8 +65,8 @@ export default function SkillTree() {
           </button>
           <Hearts hearts={hearts} maxHearts={maxHearts} />
         </div>
-        <h1 className="text-2xl font-extrabold text-duo-text">技能树</h1>
-        <p className="text-sm text-duo-text-secondary mt-1">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-duo-text">技能树</h1>
+        <p className="text-sm md:text-base text-duo-text-secondary mt-1">
           逐层解锁，从 SQL 基础到数据分析大师
         </p>
         <div className="mt-2">
@@ -74,14 +74,14 @@ export default function SkillTree() {
         </div>
       </div>
 
-      {/* Unit Tabs */}
-      <div className="flex gap-2 px-4 py-3 overflow-x-auto sticky top-[100px] bg-white z-10 border-b border-duo-surface-dark">
+      {/* Unit Tabs - 桌面端居中 */}
+      <div className="flex gap-2 px-4 md:px-6 py-3 overflow-x-auto sticky top-[110px] md:top-[130px] bg-white z-10 border-b border-duo-surface-dark md:justify-center">
         {updatedTree.map((unit, i) => (
           <button
             key={unit.id}
             onClick={() => setSelectedUnit(i)}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all
+              flex items-center gap-2 px-4 md:px-5 py-2 md:py-3 rounded-xl font-bold whitespace-nowrap transition-all
               ${selectedUnit === i
                 ? 'bg-duo-green text-white shadow-[0_3px_0_#46A302]'
                 : 'bg-duo-surface text-duo-text-secondary hover:bg-duo-surface-dark'
@@ -89,45 +89,44 @@ export default function SkillTree() {
               cursor-pointer
             `}
           >
-            <span>{unit.icon}</span>
-            <span className="text-sm">{unit.title}</span>
+            <span className="text-lg md:text-xl">{unit.icon}</span>
+            <span className="text-sm md:text-base">{unit.title}</span>
           </button>
         ))}
       </div>
 
       {/* Node List */}
-      <div className="px-4 pt-4">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-2xl">{currentUnit.icon}</span>
+      <div className="px-4 md:px-6 pt-4 md:pt-6">
+        <div className="flex items-center gap-2 mb-4 md:mb-6">
+          <span className="text-2xl md:text-3xl">{currentUnit.icon}</span>
           <div>
-            <h2 className="text-lg font-bold text-duo-text">{currentUnit.title}</h2>
-            <p className="text-xs text-duo-text-secondary">{currentUnit.description}</p>
+            <h2 className="text-lg md:text-xl font-bold text-duo-text">{currentUnit.title}</h2>
+            <p className="text-xs md:text-sm text-duo-text-secondary">{currentUnit.description}</p>
           </div>
         </div>
 
         <div className="relative">
-          {/* Connecting line */}
-          <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-duo-surface-dark" />
+          {/* Connecting line - 桌面端隐藏 */}
+          <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-duo-surface-dark skill-tree-connecting-line" />
 
-          <div className="space-y-3 relative">
+          {/* 桌面端网格布局 */}
+          <div className="skill-tree-grid space-y-3 md:space-y-0">
             {currentUnit.nodes.map((node, index) => (
               <motion.div
                 key={node.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.08 }}
-                className="relative pl-10"
+                className="relative pl-10 md:pl-0 node-item"
               >
-                {/* Node dot */}
+                {/* Node dot - 桌面端隐藏 */}
                 <div
                   className={`
                     absolute left-[10px] top-1/2 -translate-y-1/2 w-[20px] h-[20px] rounded-full border-2 z-10
-                    flex items-center justify-center text-[10px]
+                    flex items-center justify-center text-[10px] md:hidden
                     ${node.status === 'completed'
                       ? 'bg-duo-green border-duo-green'
-                      : node.status === 'unlocked'
-                      ? 'bg-white border-duo-blue'
-                      : 'bg-duo-surface-dark border-gray-300'
+                      : 'bg-white border-duo-blue'
                     }
                   `}
                 >
@@ -139,7 +138,7 @@ export default function SkillTree() {
                   onClick={() => handleStartNode(node)}
                   disabled={hearts <= 0}
                   className={`
-                    w-full flex items-center gap-3 rounded-2xl p-4 text-left
+                    w-full flex items-center gap-3 md:gap-4 rounded-2xl md:rounded-3xl p-4 md:p-5 text-left
                     border-2 transition-all cursor-pointer
                     ${node.status === 'completed'
                       ? 'bg-duo-green-light border-duo-green/30 opacity-80'
@@ -148,23 +147,23 @@ export default function SkillTree() {
                     ${hearts <= 0 ? 'cursor-not-allowed opacity-60' : ''}
                   `}
                 >
-                  <span className="text-2xl">{node.icon}</span>
+                  <span className="text-2xl md:text-3xl">{node.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-duo-text truncate">
+                      <span className="font-bold text-sm md:text-base text-duo-text truncate">
                         {node.title}
                       </span>
                       {node.status === 'completed' && (
                         <span className="text-xs bg-duo-green text-white px-2 py-0.5 rounded-full">
                           已完成
                         </span>
-                      )}](src/pages/SkillTree.tsx)
+                      )}
                     </div>
-                    <p className="text-xs text-duo-text-secondary mt-0.5 truncate">
+                    <p className="text-xs md:text-sm text-duo-text-secondary mt-0.5 truncate">
                       {node.description}
                     </p>
                     {node.status !== 'completed' && node.progress > 0 && (
-                      <div className="mt-1.5 w-full h-1.5 bg-duo-surface-dark rounded-full overflow-hidden">
+                      <div className="mt-1.5 w-full h-1.5 md:h-2 bg-duo-surface-dark rounded-full overflow-hidden">
                         <div
                           className="h-full bg-duo-blue rounded-full transition-all"
                           style={{ width: `${node.progress}%` }}
@@ -173,7 +172,7 @@ export default function SkillTree() {
                     )}
                   </div>
                   {node.status !== 'completed' && (
-                    <span className="text-duo-blue font-bold text-sm">
+                    <span className="text-duo-blue font-bold text-sm md:text-base">
                       {node.progress > 0 ? '继续 →' : '开始 →'}
                     </span>
                   )}
