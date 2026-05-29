@@ -20,9 +20,9 @@ export default function Lesson() {
   const navigate = useNavigate();
   const {
     session, result, startLesson, startQuiz, setResult, addCorrect, addXP,
-    completeSession, reset, teachingCards
+    completeSession, teachingCards
   } = useLessonStore();
-  const { hearts, maxHearts, loseHeart, awardXP } = useGameStore();
+  const { hearts, maxHearts, loseHeart } = useGameStore();
 
   const [userSQL, setUserSQL] = useState('');
   const [isRunning, setIsRunning] = useState(false);

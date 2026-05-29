@@ -28,16 +28,17 @@ async function initEngine(): Promise<Database> {
       const sqlJsModule = await import('sql.js');
       const initSqlJs = typeof sqlJsModule.default === 'function'
         ? sqlJsModule.default
-        : (typeof sqlJsModule === 'function' ? sqlJsModule : null);
+        : (typeof sqlJsModule === 'function' ? sqlJsModule : undefined);
 
       if (!initSqlJs) {
         throw new Error('initSqlJs not found in sql.js module. Check module exports.');
       }
 
-      _SQL = await initSqlJs({
-        locateFile: (file: string) => `/sql-wasm.wasm`,
-      }) as any;
-      _db = new _SQL.Database();
+      const SQL = await initSqlJs({
+        locateFile: (_file: string) => `/sql-wasm.wasm`,
+      });
+      _SQL = SQL as any;
+      _db = new _SQL!.Database();
       return _db;
     })();
   }

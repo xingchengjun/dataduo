@@ -24,7 +24,7 @@ export default function Home() {
   const [greeting, setGreeting] = useState('');
 
   useEffect(() => {
-    const isNewDay = checkDailyLogin();
+    checkDailyLogin();
     const hour = new Date().getHours();
     if (hour < 6) setGreeting('夜深了，还在刷题吗？');
     else if (hour < 9) setGreeting('早上好！☀️');

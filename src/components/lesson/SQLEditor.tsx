@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 interface SQLEditorProps {
   value: string;
@@ -33,8 +33,9 @@ export default function SQLEditor({
     // Tab to insert spaces
     if (e.key === 'Tab') {
       e.preventDefault();
-      const start = e.currentTarget.selectionStart;
-      const end = e.currentTarget.selectionEnd;
+      const textarea = e.currentTarget as HTMLTextAreaElement;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
       const newVal = value.substring(0, start) + '  ' + value.substring(end);
       onChange(newVal);
       // Restore cursor position

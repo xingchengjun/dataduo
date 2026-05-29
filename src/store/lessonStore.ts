@@ -10,7 +10,7 @@ interface LessonStore {
   startLesson: (unitId: string, nodeId: string, questions: SQLQuestion[], teaching: ConceptCard[], hearts: number) => void;
   startQuiz: () => void;
   nextQuestion: () => SQLQuestion | null;
-  setResult: (result: JudgeResult) => void;
+  setResult: (result: JudgeResult | null) => void;
   addCorrect: () => void;
   addXP: (xp: number) => void;
   completeSession: () => void;
