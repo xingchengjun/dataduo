@@ -16,30 +16,19 @@ export default function SkillTree() {
 
   const [selectedUnit, setSelectedUnit] = useState(0);
 
-  // Update node status based on completed lessons
+  // All nodes unlocked, track completion status
   const updatedTree = SKILL_TREE.map((unit) => ({
     ...unit,
     nodes: unit.nodes.map((node) => {
       const allLessonsDone = node.lessonIds.every((id) => completedLessons.includes(id));
-      const someLessonsDone = node.lessonIds.some((id) => completedLessons.includes(id));
-      const prereqsDone = node.prerequisites.every((prereqId) => {
-        const prereq = getNodeById(prereqId);
-        if (!prereq) return true;
-        return prereq.node.lessonIds.every((id) => completedLessons.includes(id));
-      });
 
       return {
         ...node,
-        status: allLessonsDone
-          ? ('completed' as const)
-          : prereqsDone
-          ? ('unlocked' as const)
-          : ('locked' as const),
+        status: allLessonsDone ? ('completed' as const) : ('unlocked' as const),
         progress: node.lessonIds.length > 0
           ? Math.round(
               (node.lessonIds.filter((id) => completedLessons.includes(id)).length /
-                node.lessonIds.length) *
-                100
+                node.lessonIds.length) * 100
             )
           : 0,
       };
@@ -148,17 +137,15 @@ export default function SkillTree() {
                 {/* Node Card */}
                 <button
                   onClick={() => handleStartNode(node)}
-                  disabled={node.status === 'locked' || hearts <= 0}
+                  disabled={hearts <= 0}
                   className={`
                     w-full flex items-center gap-3 rounded-2xl p-4 text-left
-                    border-2 transition-all
+                    border-2 transition-all cursor-pointer
                     ${node.status === 'completed'
                       ? 'bg-duo-green-light border-duo-green/30 opacity-80'
-                      : node.status === 'unlocked'
-                      ? 'bg-white border-duo-blue/30 hover:border-duo-blue hover:shadow-md'
-                      : 'bg-duo-surface border-duo-surface-dark opacity-60'
+                      : 'bg-white border-duo-blue/30 hover:border-duo-blue hover:shadow-md'
                     }
-                    ${hearts <= 0 && node.status === 'unlocked' ? 'cursor-not-allowed' : 'cursor-pointer'}
+                    ${hearts <= 0 ? 'cursor-not-allowed opacity-60' : ''}
                   `}
                 >
                   <span className="text-2xl">{node.icon}</span>
@@ -171,15 +158,12 @@ export default function SkillTree() {
                         <span className="text-xs bg-duo-green text-white px-2 py-0.5 rounded-full">
                           已完成
                         </span>
-                      )}
-                      {node.status === 'locked' && (
-                        <span className="text-xs text-duo-text-secondary">🔒</span>
-                      )}
+                      )}](src/pages/SkillTree.tsx)
                     </div>
                     <p className="text-xs text-duo-text-secondary mt-0.5 truncate">
                       {node.description}
                     </p>
-                    {node.status === 'unlocked' && node.progress > 0 && (
+                    {node.status !== 'completed' && node.progress > 0 && (
                       <div className="mt-1.5 w-full h-1.5 bg-duo-surface-dark rounded-full overflow-hidden">
                         <div
                           className="h-full bg-duo-blue rounded-full transition-all"
@@ -188,7 +172,7 @@ export default function SkillTree() {
                       </div>
                     )}
                   </div>
-                  {node.status === 'unlocked' && (
+                  {node.status !== 'completed' && (
                     <span className="text-duo-blue font-bold text-sm">
                       {node.progress > 0 ? '继续 →' : '开始 →'}
                     </span>

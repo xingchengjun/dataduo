@@ -1,0 +1,566 @@
+#!/usr/bin/env python3
+"""Rebuild questions.ts with all questions in the array, utility functions at end."""
+import re, os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+with open('src/data/questions.ts', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Find the utility functions section
+util_start = content.find('\nexport function getQuestionById')
+if util_start < 0:
+    util_start = content.find('export function getQuestionById')
+
+# Find the original array close - the `];` immediately before utility functions
+just_before_util = content[:util_start]
+# Find the last `];\n` or `]\n` that comes before utility functions
+last_array_close = max(just_before_util.rfind('\n];'), just_before_util.rfind('\n]'))
+
+original_array = content[:last_array_close+1]  # includes the `]` or `];`
+original_end = last_array_close
+
+# Extract utility functions
+util_end = content.find('return []', util_start)
+if util_end < 0:
+    util_end = content.find('return [];', util_start)
+if util_end < 0:
+    util_functions = content[util_start:]
+else:
+    util_functions = content[util_start:util_end+11]  # includes `return [];`
+
+# Count
+q_count = original_array.count("id: '")
+print(f"Original questions: {q_count}")
+print(f"Utility functions: {len(util_functions.split(chr(10)))} lines")
+print(f"Original array ends at: {original_end}")
+
+# Now we need to add new questions before the `];`
+# Reconstruct: array body (without ];) + new questions + ]; + utility functions
+array_body = original_array[:original_array.rfind('\n];')]
+
+# Generate the new questions
+new_questions = """
+
+  // ===== 新增题：WHERE 进阶 =====
+  {
+    id: 'sql-where-5',
+    unitId: 'sql-basics',
+    title: '多条件过滤 + 排除',
+    description: '从 employees 表查询 Engineering 部门薪资在 90000 到 120000 之间的员工，排除名字为 Bob 的员工。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, department, salary, hire_date)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL, hire_date TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000, '2020-01-15');INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 105000, '2021-03-20');INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 95000, '2019-11-01');INSERT INTO employees VALUES (4, 'Diana', 'Sales', 95000, '2022-06-10');INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 85000, '2023-02-28');`,
+    expectedSQL: "SELECT * FROM employees WHERE department = 'Engineering' AND salary BETWEEN 90000 AND 120000 AND name != 'Bob';",
+    hints: ['用 AND 连接多个条件', 'BETWEEN 是包含边界的'],
+    explanation: '面试中常见组合条件过滤。BETWEEN 是闭区间，等价于 salary >= 90000 AND salary <= 120000。',
+  },
+  {
+    id: 'sql-where-6',
+    unitId: 'sql-basics',
+    title: 'NOT IN 排除列表',
+    description: '从 employees 表查询部门不是 Engineering 也不是 Sales 的员工。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, department, salary, hire_date)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL, hire_date TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000, '2020-01-15');INSERT INTO employees VALUES (2, 'Bob', 'Marketing', 90000, '2021-03-20');INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 110000, '2019-11-01');INSERT INTO employees VALUES (4, 'Diana', 'Sales', 95000, '2022-06-10');INSERT INTO employees VALUES (5, 'Eve', 'HR', 85000, '2023-02-28');`,
+    expectedSQL: "SELECT * FROM employees WHERE department NOT IN ('Engineering', 'Sales');",
+    hints: ['使用 NOT IN 语法', '也可以写成 != 并用 AND 连接'],
+    explanation: 'NOT IN 常用于排除多个值。注意如果列表中有 NULL，NOT IN 结果会为空，这是面试常考陷阱！',
+  },
+
+  // ===== 新增题：NULL 处理 =====
+  {
+    id: 'sql-null-2',
+    unitId: 'sql-basics',
+    title: 'COALESCE 处理 NULL',
+    description: '从 employees 表查询员工姓名和部门，如果部门为 NULL 则显示未分配。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', NULL, 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Marketing', 110000);INSERT INTO employees VALUES (4, 'Diana', NULL, 95000);`,
+    expectedSQL: "SELECT name, COALESCE(department, '未分配') AS department FROM employees;",
+    hints: ['COALESCE 返回第一个非 NULL 值'],
+    explanation: 'COALESCE 是处理 NULL 最常用的函数，接受多个参数返回第一个非 NULL 值。面试必考！',
+  },
+  {
+    id: 'sql-null-3',
+    unitId: 'sql-basics',
+    title: 'NULL 陷阱：空值运算',
+    description: '从 employees 表查询员工姓名和薪资，如果薪资为 NULL 则显示 0。同时查询薪资加 1000 后的值。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, salary REAL);INSERT INTO employees VALUES (1, 'Alice', 120000);INSERT INTO employees VALUES (2, 'Bob', NULL);INSERT INTO employees VALUES (3, 'Charlie', 110000);INSERT INTO employees VALUES (4, 'Diana', NULL);`,
+    expectedSQL: "SELECT name, COALESCE(salary, 0) AS salary, COALESCE(salary, 0) + 1000 AS salary_plus FROM employees;",
+    hints: ['任何值与 NULL 运算结果都是 NULL', '使用 COALESCE 或 IFNULL'],
+    explanation: 'NULL + 1000 = NULL 是经典陷阱。必须先用 COALESCE 把 NULL 转成 0 再做运算。',
+  },
+
+  // ===== 新增题：去重 / 排序 / 分组 =====
+  {
+    id: 'sql-distinct-2',
+    unitId: 'sql-basics',
+    title: '多列去重',
+    description: '从 employees 表查询所有不重复的 (department, position) 组合。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, department, position, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, position TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 'Senior', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 'Junior', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 'Senior', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 'Senior', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 'Junior', 85000);`,
+    expectedSQL: "SELECT DISTINCT department, position FROM employees;",
+    hints: ['DISTINCT 可以作用于多列组合'],
+    explanation: 'DISTINCT 作用于后面所有列的组合。这是数据分析中查看唯一组合模式的常用方法。',
+  },
+  {
+    id: 'sql-order-3',
+    unitId: 'sql-basics',
+    title: '多级排序 + TOP N',
+    description: '从 employees 表先按部门升序再按薪资降序排列，返回前 3 条记录。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Marketing', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Sales', 85000);`,
+    expectedSQL: "SELECT * FROM employees ORDER BY department ASC, salary DESC LIMIT 3;",
+    hints: ['ORDER BY 多个列用逗号分隔', 'LIMIT 限制返回行数'],
+    explanation: '多级排序面试高频题。先按部门排序，同部门内按薪资降序排列。',
+  },
+  {
+    id: 'sql-order-4',
+    unitId: 'sql-basics',
+    title: 'ORDER BY + 表达式',
+    description: '从 employees 表按年薪（salary * 12）降序排列，查询员工姓名和年薪。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 120000);INSERT INTO employees VALUES (2, 'Bob', 90000);INSERT INTO employees VALUES (3, 'Charlie', 110000);`,
+    expectedSQL: "SELECT name, salary * 12 AS annual_salary FROM employees ORDER BY annual_salary DESC;",
+    hints: ['可以在 ORDER BY 中使用别名', 'ORDER BY 在 SELECT 之后执行'],
+    explanation: 'ORDER BY 在 SELECT 之后执行，所以可以使用别名排序。',
+  },
+  {
+    id: 'sql-having-1',
+    unitId: 'sql-basics',
+    title: 'HAVING 过滤分组',
+    description: '从 employees 表统计各部门平均薪资，只显示平均薪资 > 95000 的部门。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Marketing', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 65000);INSERT INTO employees VALUES (5, 'Eve', 'Sales', 50000);`,
+    expectedSQL: "SELECT department, AVG(salary) AS avg_salary FROM employees GROUP BY department HAVING AVG(salary) > 95000;",
+    hints: ['HAVING 过滤分组，WHERE 过滤行', 'HAVING 可以使用聚合函数'],
+    explanation: 'WHERE 在 GROUP BY 之前过滤行，HAVING 在 GROUP BY 之后过滤组。',
+  },
+  {
+    id: 'sql-group-4',
+    unitId: 'sql-basics',
+    title: 'GROUP BY 多列',
+    description: '从 employees 表统计每个部门每种职位的员工数量和平均薪资。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, department, position, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, position TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 'Senior', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 'Junior', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 'Senior', 130000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 'Senior', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 'Junior', 85000);`,
+    expectedSQL: "SELECT department, position, COUNT(*) AS cnt, AVG(salary) AS avg_salary FROM employees GROUP BY department, position;",
+    hints: ['GROUP BY 后面可以跟多个列', '多列分组按组合去重'],
+    explanation: '多列分组是按列的组合来聚合，相当于 Excel 中的多级透视表。',
+  },
+
+  // ===== 新增题：CASE WHEN =====
+  {
+    id: 'sql-case-3',
+    unitId: 'sql-basics',
+    title: 'CASE WHEN + 聚合 Pivot',
+    description: '从 employees 表统计每个部门的薪资级别分布。薪资 >= 100000 为高薪，>= 70000 为中薪，其余为低薪。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 80000);INSERT INTO employees VALUES (3, 'Charlie', 'Marketing', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 65000);INSERT INTO employees VALUES (5, 'Eve', 'Sales', 50000);`,
+    expectedSQL: "SELECT department, COUNT(CASE WHEN salary >= 100000 THEN 1 END) AS high_salary, COUNT(CASE WHEN salary >= 70000 AND salary < 100000 THEN 1 END) AS mid_salary, COUNT(CASE WHEN salary < 70000 THEN 1 END) AS low_salary FROM employees GROUP BY department;",
+    hints: ['在 COUNT 或 SUM 里面嵌套 CASE WHEN', 'CASE WHEN 不匹配时返回 NULL'],
+    explanation: '数据分析面试高频题——用 CASE WHEN 做条件聚合，把行转成列统计。',
+  },
+  {
+    id: 'sql-case-4',
+    unitId: 'sql-basics',
+    title: 'CASE WHEN 打标签',
+    description: '从 employees 表根据 hire_date 给员工打标签。2020 年之前入职为老员工，2020-2021 为骨干，2022 之后为新员工。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, hire_date, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, hire_date TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', '2019-01-15', 120000);INSERT INTO employees VALUES (2, 'Bob', '2020-03-20', 90000);INSERT INTO employees VALUES (3, 'Charlie', '2021-11-01', 110000);INSERT INTO employees VALUES (4, 'Diana', '2022-06-10', 95000);INSERT INTO employees VALUES (5, 'Eve', '2023-02-28', 85000);`,
+    expectedSQL: "SELECT name, hire_date, CASE WHEN hire_date < '2020-01-01' THEN '老员工' WHEN hire_date < '2022-01-01' THEN '骨干' ELSE '新员工' END AS tag FROM employees;",
+    hints: ['CASE WHEN 按顺序判断，把最严格的条件放前面'],
+    explanation: 'CASE WHEN 顺序很重要。先判断最严格的条件。',
+  },
+
+  // ===== 新增题：多表连接 =====
+  {
+    id: 'sql-inner-join-3',
+    unitId: 'sql-joins',
+    title: '三表连接查询',
+    description: '查询每个员工的姓名、部门名和项目名（三张表：employees, departments, projects）。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, dept_id) / departments(id, dept_name) / projects(id, project_name, employee_id)',
+    setupSQL: `CREATE TABLE departments (id INTEGER PRIMARY KEY, dept_name TEXT NOT NULL);INSERT INTO departments VALUES (1, 'Engineering');INSERT INTO departments VALUES (2, 'Marketing');CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, dept_id INTEGER);INSERT INTO employees VALUES (1, 'Alice', 1);INSERT INTO employees VALUES (2, 'Bob', 1);INSERT INTO employees VALUES (3, 'Charlie', 2);INSERT INTO employees VALUES (4, 'Diana', 2);CREATE TABLE projects (id INTEGER PRIMARY KEY, project_name TEXT NOT NULL, employee_id INTEGER);INSERT INTO projects VALUES (1, 'Web App', 1);INSERT INTO projects VALUES (2, 'Mobile App', 1);INSERT INTO projects VALUES (3, 'Ad Campaign', 3);`,
+    expectedSQL: "SELECT e.name, d.dept_name, p.project_name FROM employees e JOIN departments d ON e.dept_id = d.id JOIN projects p ON e.id = p.employee_id;",
+    hints: ['多表连接需要多个 JOIN 子句', '每个 JOIN 后面跟上 ON 条件'],
+    explanation: '三表连接面试高频题。通过 JOIN 链把三张表关联起来。',
+  },
+  {
+    id: 'sql-inner-join-4',
+    unitId: 'sql-joins',
+    title: 'JOIN + 条件过滤',
+    description: '查询 Engineering 部门所有员工的姓名和薪资。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, dept_id, salary) / departments(id, dept_name)',
+    setupSQL: `CREATE TABLE departments (id INTEGER PRIMARY KEY, dept_name TEXT NOT NULL);INSERT INTO departments VALUES (1, 'Engineering');INSERT INTO departments VALUES (2, 'Marketing');INSERT INTO departments VALUES (3, 'Sales');CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, dept_id INTEGER, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 1, 120000);INSERT INTO employees VALUES (2, 'Bob', 1, 90000);INSERT INTO employees VALUES (3, 'Charlie', 2, 110000);INSERT INTO employees VALUES (4, 'Diana', 3, 95000);`,
+    expectedSQL: "SELECT e.name, e.salary FROM employees e JOIN departments d ON e.dept_id = d.id WHERE d.dept_name = 'Engineering';",
+    hints: ['先 JOIN 再 WHERE'],
+    explanation: 'JOIN 后加 WHERE 是最常见的 JOIN + 过滤模式。',
+  },
+  {
+    id: 'sql-left-join-2',
+    unitId: 'sql-joins',
+    title: 'LEFT JOIN 查空部门',
+    description: '查询所有部门及其员工数，包含没有员工的部门（显示 0）。',
+    difficulty: 'medium',
+    tableSchema: 'departments(id, dept_name) / employees(id, name, dept_id)',
+    setupSQL: `CREATE TABLE departments (id INTEGER PRIMARY KEY, dept_name TEXT NOT NULL);INSERT INTO departments VALUES (1, 'Engineering');INSERT INTO departments VALUES (2, 'Marketing');INSERT INTO departments VALUES (3, 'HR');INSERT INTO departments VALUES (4, 'Sales');CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, dept_id INTEGER);INSERT INTO employees VALUES (1, 'Alice', 1);INSERT INTO employees VALUES (2, 'Bob', 1);INSERT INTO employees VALUES (3, 'Charlie', 2);`,
+    expectedSQL: "SELECT d.dept_name, COUNT(e.id) AS emp_count FROM departments d LEFT JOIN employees e ON d.id = e.dept_id GROUP BY d.dept_name;",
+    hints: ['LEFT JOIN 保留左表所有行', 'COUNT(右表列) 不会统计 NULL'],
+    explanation: 'LEFT JOIN + GROUP BY + COUNT 是查无数据的经典模式。用 COUNT(e.id) 而非 COUNT(*)。',
+  },
+  {
+    id: 'sql-join-agg-2',
+    unitId: 'sql-joins',
+    title: 'JOIN + 聚合分析',
+    description: '查询每个部门的部门名、员工数、最高薪资和最低薪资。',
+    difficulty: 'medium',
+    tableSchema: 'departments(id, dept_name) / employees(id, name, dept_id, salary)',
+    setupSQL: `CREATE TABLE departments (id INTEGER PRIMARY KEY, dept_name TEXT NOT NULL);INSERT INTO departments VALUES (1, 'Engineering');INSERT INTO departments VALUES (2, 'Marketing');CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, dept_id INTEGER, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 1, 120000);INSERT INTO employees VALUES (2, 'Bob', 1, 90000);INSERT INTO employees VALUES (3, 'Charlie', 1, 110000);INSERT INTO employees VALUES (4, 'Diana', 2, 95000);INSERT INTO employees VALUES (5, 'Eve', 2, 85000);`,
+    expectedSQL: "SELECT d.dept_name, COUNT(e.id) AS emp_count, MAX(e.salary) AS max_salary, MIN(e.salary) AS min_salary FROM departments d LEFT JOIN employees e ON d.id = e.dept_id GROUP BY d.dept_name;",
+    hints: ['LEFT JOIN 保留所有部门', 'GROUP BY 按部门聚合统计'],
+    explanation: 'JOIN + GROUP BY 是最常见的数据分析模式。',
+  },
+  {
+    id: 'sql-self-join-2',
+    unitId: 'sql-joins',
+    title: 'SELF JOIN 组织架构',
+    description: 'employees 表有 manager_id 表示上级。查询每个员工及其上级的姓名。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, manager_id)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, manager_id INTEGER);INSERT INTO employees VALUES (1, 'Alice', NULL);INSERT INTO employees VALUES (2, 'Bob', 1);INSERT INTO employees VALUES (3, 'Charlie', 1);INSERT INTO employees VALUES (4, 'Diana', 2);INSERT INTO employees VALUES (5, 'Eve', 2);`,
+    expectedSQL: "SELECT e1.name AS employee, e2.name AS manager FROM employees e1 LEFT JOIN employees e2 ON e1.manager_id = e2.id;",
+    hints: ['给同一张表起两个不同的别名', '用 LEFT JOIN 保留无上级的员工'],
+    explanation: '自连接是 SQL 面试难点——把一张表当作两张表用。常见于组织架构。',
+  },
+
+  // ===== 新增题：窗口函数 =====
+  {
+    id: 'sql-row-number-1',
+    unitId: 'window-functions',
+    title: 'ROW_NUMBER 分区排名',
+    description: '给每个部门按薪资降序编号，薪资最高的标为 1。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 85000);`,
+    expectedSQL: "SELECT name, department, salary, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS row_num FROM employees;",
+    hints: ['ROW_NUMBER 给每个分区内的行编号', 'PARTITION BY 定义分区'],
+    explanation: 'ROW_NUMBER 是窗口函数最基础也最有用的一种。结合 PARTITION BY 实现组内排名。',
+  },
+  {
+    id: 'sql-rank-3',
+    unitId: 'window-functions',
+    title: 'RANK vs DENSE_RANK',
+    description: '同时用 RANK 和 DENSE_RANK 排名，对比区别。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 120000);INSERT INTO employees VALUES (2, 'Bob', 120000);INSERT INTO employees VALUES (3, 'Charlie', 110000);INSERT INTO employees VALUES (4, 'Diana', 95000);INSERT INTO employees VALUES (5, 'Eve', 95000);`,
+    expectedSQL: "SELECT name, salary, RANK() OVER (ORDER BY salary DESC) AS rank, DENSE_RANK() OVER (ORDER BY salary DESC) AS dense_rank FROM employees;",
+    hints: ['RANK 并列会跳过后续名次', 'DENSE_RANK 并列不会跳过名次'],
+    explanation: 'RANK 跳号（1,1,3），DENSE_RANK 不跳号（1,1,2）。面试必考区别！',
+  },
+  {
+    id: 'sql-lag-2',
+    unitId: 'window-functions',
+    title: 'LAG 环比增长率',
+    description: '计算每日销售额的环比增长率和增长金额。',
+    difficulty: 'hard',
+    tableSchema: 'daily_sales(date, sales)',
+    setupSQL: `CREATE TABLE daily_sales (date TEXT PRIMARY KEY, sales REAL NOT NULL);INSERT INTO daily_sales VALUES ('2024-01-01', 1000);INSERT INTO daily_sales VALUES ('2024-01-02', 1200);INSERT INTO daily_sales VALUES ('2024-01-03', 1100);INSERT INTO daily_sales VALUES ('2024-01-04', 1500);`,
+    expectedSQL: "SELECT date, sales, sales - LAG(sales) OVER (ORDER BY date) AS mom_change, ROUND((sales - LAG(sales) OVER (ORDER BY date)) * 100.0 / LAG(sales) OVER (ORDER BY date), 2) AS mom_pct FROM daily_sales;",
+    hints: ['LAG 可以访问前一行的值'],
+    explanation: 'LAG 环比计算是数据分析面试必考题。用 LAG 取前一周期值，再算差额和百分比。',
+  },
+  {
+    id: 'sql-window-agg-3',
+    unitId: 'window-functions',
+    title: '累计求和 Running Total',
+    description: '计算每日的累计销售额（从第一天到当天的总和）。',
+    difficulty: 'medium',
+    tableSchema: 'daily_sales(date, sales)',
+    setupSQL: `CREATE TABLE daily_sales (date TEXT PRIMARY KEY, sales REAL NOT NULL);INSERT INTO daily_sales VALUES ('2024-01-01', 1000);INSERT INTO daily_sales VALUES ('2024-01-02', 1200);INSERT INTO daily_sales VALUES ('2024-01-03', 1100);INSERT INTO daily_sales VALUES ('2024-01-04', 1500);`,
+    expectedSQL: "SELECT date, sales, SUM(sales) OVER (ORDER BY date) AS running_total FROM daily_sales;",
+    hints: ['SUM OVER ORDER BY 实现累计求和'],
+    explanation: 'SUM OVER ORDER BY 是窗口聚合的经典用法——每行累计到当前行的总和。',
+  },
+  {
+    id: 'sql-window-agg-4',
+    unitId: 'window-functions',
+    title: '移动平均 MA3',
+    description: '计算每日销售额的 3 天移动平均值。',
+    difficulty: 'hard',
+    tableSchema: 'daily_sales(date, sales)',
+    setupSQL: `CREATE TABLE daily_sales (date TEXT PRIMARY KEY, sales REAL NOT NULL);INSERT INTO daily_sales VALUES ('2024-01-01', 1000);INSERT INTO daily_sales VALUES ('2024-01-02', 1200);INSERT INTO daily_sales VALUES ('2024-01-03', 1100);INSERT INTO daily_sales VALUES ('2024-01-04', 1500);INSERT INTO daily_sales VALUES ('2024-01-05', 1400);`,
+    expectedSQL: "SELECT date, sales, ROUND(AVG(sales) OVER (ORDER BY date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2) AS moving_avg_3 FROM daily_sales;",
+    hints: ['使用 ROWS BETWEEN 定义窗口范围', '移动平均是时间序列分析基础'],
+    explanation: '移动平均通过 ROWS BETWEEN 定义窗口范围。面试常考 MA3、MA7。',
+  },
+  {
+    id: 'sql-window-agg-5',
+    unitId: 'window-functions',
+    title: '组内占比计算',
+    description: '计算每个员工薪资占其部门总薪资的百分比。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Marketing', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 65000);`,
+    expectedSQL: "SELECT name, department, salary, ROUND(salary * 100.0 / SUM(salary) OVER (PARTITION BY department), 2) AS pct FROM employees;",
+    hints: ['SUM OVER PARTITION BY 计算组内总和'],
+    explanation: '窗口中用聚合函数 OVER PARTITION BY 实现组内占比，是数据分析的常用技巧。',
+  },
+
+  // ===== 新增题：子查询 =====
+  {
+    id: 'sql-subquery-3',
+    unitId: 'advanced-sql',
+    title: '相关子查询',
+    description: '查询薪资高于其所在部门平均薪资的员工。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 85000);`,
+    expectedSQL: "SELECT e1.name, e1.salary, e1.department FROM employees e1 WHERE e1.salary > (SELECT AVG(e2.salary) FROM employees e2 WHERE e2.department = e1.department);",
+    hints: ['相关子查询引用外层表的列', '每行都会执行一次子查询'],
+    explanation: '相关子查询是面试高频难题。内层查询依赖外层行的值，每行都要执行一次。',
+  },
+  {
+    id: 'sql-subquery-4',
+    unitId: 'advanced-sql',
+    title: 'SELECT 中的标量子查询',
+    description: '查询每个员工的姓名、薪资，以及薪资与公司平均薪资的差额。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 120000);INSERT INTO employees VALUES (2, 'Bob', 90000);INSERT INTO employees VALUES (3, 'Charlie', 110000);INSERT INTO employees VALUES (4, 'Diana', 95000);`,
+    expectedSQL: "SELECT name, salary, (SELECT AVG(salary) FROM employees) AS company_avg, salary - (SELECT AVG(salary) FROM employees) AS diff_from_avg FROM employees;",
+    hints: ['标量子查询返回单个值', '可以用在 SELECT 子句中'],
+    explanation: 'SELECT 里的子查询必须返回单个值（标量）。常用于查询时做对比基准。',
+  },
+  {
+    id: 'sql-subquery-5',
+    unitId: 'advanced-sql',
+    title: 'EXISTS 与 NOT EXISTS',
+    description: '查询没有员工的部门。',
+    difficulty: 'medium',
+    tableSchema: 'departments(id, dept_name) / employees(id, name, dept_id)',
+    setupSQL: `CREATE TABLE departments (id INTEGER PRIMARY KEY, dept_name TEXT NOT NULL);INSERT INTO departments VALUES (1, 'Engineering');INSERT INTO departments VALUES (2, 'Marketing');INSERT INTO departments VALUES (3, 'HR');CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, dept_id INTEGER);INSERT INTO employees VALUES (1, 'Alice', 1);INSERT INTO employees VALUES (2, 'Bob', 1);INSERT INTO employees VALUES (3, 'Charlie', 2);`,
+    expectedSQL: "SELECT d.dept_name FROM departments d WHERE NOT EXISTS (SELECT 1 FROM employees e WHERE e.dept_id = d.id);",
+    hints: ['EXISTS 找到第一条匹配就返回 TRUE'],
+    explanation: 'EXISTS 在找到第一行时就停止，效率高于 IN。',
+  },
+
+  // ===== 新增题：CTE =====
+  {
+    id: 'sql-cte-3',
+    unitId: 'advanced-sql',
+    title: '多 CTE 级联查询',
+    description: '分别计算各部门的平均薪资和人数，联合查询出人数 > 1 且平均薪资 > 90000 的部门。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, department, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 120000);INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 90000);INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 110000);INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 95000);INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 85000);`,
+    expectedSQL: "WITH dept_avg AS (SELECT department, AVG(salary) AS avg_sal FROM employees GROUP BY department), dept_count AS (SELECT department, COUNT(*) AS cnt FROM employees GROUP BY department) SELECT a.department, a.avg_sal, c.cnt FROM dept_avg a JOIN dept_count c ON a.department = c.department WHERE a.avg_sal > 90000 AND c.cnt > 1;",
+    hints: ['WITH 后面可以定义多个 CTE，用逗号分隔'],
+    explanation: '多 CTE 让复杂查询像流水线一样清晰——每一步都在前一步的基础上加工。',
+  },
+  {
+    id: 'sql-cte-4',
+    unitId: 'advanced-sql',
+    title: '递归 CTE 生成日期序列',
+    description: '用递归 CTE 生成 2024 年 1 月的所有日期。',
+    difficulty: 'hard',
+    tableSchema: '无',
+    setupSQL: '',
+    expectedSQL: "WITH RECURSIVE dates AS (SELECT DATE('2024-01-01') AS dt UNION ALL SELECT DATE(dt, '+1 day') FROM dates WHERE dt < '2024-01-31') SELECT * FROM dates;",
+    hints: ['递归 CTE 需要 UNION ALL', '递归部分引用自身并添加终止条件'],
+    explanation: '递归 CTE 面试加分题！常用于生成日历数据。',
+  },
+  {
+    id: 'sql-cte-5',
+    unitId: 'advanced-sql',
+    title: 'CTE 用户次日留存',
+    description: '计算每个首次登录日期的用户次日留存数。',
+    difficulty: 'hard',
+    tableSchema: 'logins(id, user_id, login_date)',
+    setupSQL: `CREATE TABLE logins (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, login_date DATE NOT NULL);INSERT INTO logins VALUES (1, 1, '2024-01-01');INSERT INTO logins VALUES (2, 1, '2024-01-02');INSERT INTO logins VALUES (3, 2, '2024-01-01');INSERT INTO logins VALUES (4, 3, '2024-01-01');INSERT INTO logins VALUES (5, 3, '2024-01-02');INSERT INTO logins VALUES (6, 2, '2024-01-03');`,
+    expectedSQL: "WITH first_login AS (SELECT user_id, MIN(login_date) AS first_date FROM logins GROUP BY user_id) SELECT f.first_date, COUNT(DISTINCT l.user_id) AS retained FROM first_login f LEFT JOIN logins l ON f.user_id = l.user_id AND l.login_date = DATE(f.first_date, '+1 day') GROUP BY f.first_date;",
+    hints: ['先找出每个用户首次登录日期作为基准', 'LEFT JOIN 查找次日登录'],
+    explanation: '留存率分析是数据分析师面试必考题。用 CTE 先取基准组，再计算后续活跃用户。',
+  },
+
+  // ===== 新增题：集合 / 字符串 / 日期 / 进阶 =====
+  {
+    id: 'sql-set-3',
+    unitId: 'advanced-sql',
+    title: 'UNION ALL 合并结果',
+    description: '查询两个地区的销售团队名单合并到一起。',
+    difficulty: 'easy',
+    tableSchema: 'sales_north(name, sales) / sales_south(name, sales)',
+    setupSQL: `CREATE TABLE sales_north (name TEXT NOT NULL, sales REAL NOT NULL);INSERT INTO sales_north VALUES ('Alice', 1000);INSERT INTO sales_north VALUES ('Bob', 900);CREATE TABLE sales_south (name TEXT NOT NULL, sales REAL NOT NULL);INSERT INTO sales_south VALUES ('Charlie', 1100);INSERT INTO sales_south VALUES ('Diana', 950);`,
+    expectedSQL: "SELECT name, sales FROM sales_north UNION ALL SELECT name, sales FROM sales_south;",
+    hints: ['UNION ALL 保留所有行包括重复', '列数必须相同'],
+    explanation: 'UNION ALL 性能比 UNION 好，因为不检查重复。',
+  },
+  {
+    id: 'sql-set-4',
+    unitId: 'advanced-sql',
+    title: 'EXCEPT 查差异',
+    description: '查询全部产品中当前没有库存的产品。',
+    difficulty: 'medium',
+    tableSchema: 'products_all(product_id) / products_current(product_id)',
+    setupSQL: `CREATE TABLE products_all (product_id TEXT PRIMARY KEY);INSERT INTO products_all VALUES ('A001');INSERT INTO products_all VALUES ('A002');INSERT INTO products_all VALUES ('A003');INSERT INTO products_all VALUES ('A004');CREATE TABLE products_current (product_id TEXT PRIMARY KEY);INSERT INTO products_current VALUES ('A001');INSERT INTO products_current VALUES ('A003');`,
+    expectedSQL: "SELECT product_id FROM products_all EXCEPT SELECT product_id FROM products_current;",
+    hints: ['EXCEPT 返回左表有右表无的数据'],
+    explanation: 'EXCEPT 常用于数据差异对比和分析，比如查缺失数据。',
+  },
+  {
+    id: 'sql-str-2',
+    unitId: 'advanced-sql',
+    title: '字符串拼接',
+    description: '从 employees 表将姓名和部门用 - 拼接成一个字段。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, department)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering');INSERT INTO employees VALUES (2, 'Bob', 'Marketing');`,
+    expectedSQL: "SELECT name || ' - ' || department AS name_dept FROM employees;",
+    hints: ['SQLite 用 || 拼接字符串'],
+    explanation: '不同数据库字符串拼接语法不同，SQLite 用 ||，MySQL 用 CONCAT()。',
+  },
+  {
+    id: 'sql-str-3',
+    unitId: 'advanced-sql',
+    title: '提取邮箱用户名',
+    description: '从 employees 表的 email 字段中提取 @ 符号前的用户名部分。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, email)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'alice@company.com');INSERT INTO employees VALUES (2, 'Bob', 'bob@company.com');INSERT INTO employees VALUES (3, 'Charlie', 'charlie@test.org');`,
+    expectedSQL: "SELECT email, SUBSTR(email, 1, INSTR(email, '@') - 1) AS username FROM employees;",
+    hints: ['INSTR 查找字符位置', 'SUBSTR 截取字符串'],
+    explanation: '字符串处理是数据分析师基本功。INSTR 定位 @，SUBSTR 截取前面的部分。',
+  },
+  {
+    id: 'sql-date-2',
+    unitId: 'advanced-sql',
+    title: '日期提取年/月',
+    description: '从 employees 表中提取每位员工的入职年份和月份。',
+    difficulty: 'easy',
+    tableSchema: 'employees(id, name, hire_date)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, hire_date TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', '2020-01-15');INSERT INTO employees VALUES (2, 'Bob', '2021-03-20');INSERT INTO employees VALUES (3, 'Charlie', '2019-11-01');`,
+    expectedSQL: "SELECT name, hire_date, STRFTIME('%Y', hire_date) AS hire_year, STRFTIME('%m', hire_date) AS hire_month FROM employees;",
+    hints: ['SQLite 用 STRFTIME 格式化日期'],
+    explanation: 'STRFTIME 是 SQLite 中处理日期的核心函数。%Y 年份，%m 月份，%d 日。',
+  },
+  {
+    id: 'sql-date-3',
+    unitId: 'advanced-sql',
+    title: '日期差计算',
+    description: '计算每位员工入职至今的天数。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, hire_date)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, hire_date TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', '2020-01-15');INSERT INTO employees VALUES (2, 'Bob', '2021-03-20');INSERT INTO employees VALUES (3, 'Charlie', '2022-11-01');`,
+    expectedSQL: "SELECT name, hire_date, CAST(JULIANDAY('now') - JULIANDAY(hire_date) AS INTEGER) AS days_employed FROM employees;",
+    hints: ['JULIANDAY 把日期转成儒略日数字'],
+    explanation: 'JULIANDAY 转成数值后相减得到天数差。',
+  },
+  {
+    id: 'sql-date-4',
+    unitId: 'advanced-sql',
+    title: '按年月分组统计',
+    description: '统计每个年月的入职人数，按年月排序。',
+    difficulty: 'medium',
+    tableSchema: 'employees(id, name, hire_date)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, hire_date TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', '2020-01-15');INSERT INTO employees VALUES (2, 'Bob', '2020-01-20');INSERT INTO employees VALUES (3, 'Charlie', '2020-02-01');INSERT INTO employees VALUES (4, 'Diana', '2020-02-10');INSERT INTO employees VALUES (5, 'Eve', '2021-03-01');`,
+    expectedSQL: "SELECT STRFTIME('%Y-%m', hire_date) AS year_month, COUNT(*) AS hires FROM employees GROUP BY year_month ORDER BY year_month;",
+    hints: ['先格式化日期到年月，再 GROUP BY'],
+    explanation: '按年月分组统计是最常见的日期聚合模式。',
+  },
+  {
+    id: 'sql-percentile-1',
+    unitId: 'advanced-sql',
+    title: '四分位与百分位',
+    description: '将员工按薪资分为四等份，并计算每个员工的百分位排名。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, salary)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, salary REAL NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 120000);INSERT INTO employees VALUES (2, 'Bob', 95000);INSERT INTO employees VALUES (3, 'Charlie', 110000);INSERT INTO employees VALUES (4, 'Diana', 85000);INSERT INTO employees VALUES (5, 'Eve', 65000);INSERT INTO employees VALUES (6, 'Frank', 78000);INSERT INTO employees VALUES (7, 'Grace', 135000);INSERT INTO employees VALUES (8, 'Henry', 100000);`,
+    expectedSQL: "SELECT name, salary, NTILE(4) OVER (ORDER BY salary) AS quartile, ROUND(PERCENT_RANK() OVER (ORDER BY salary) * 100, 1) AS pct_rank FROM employees;",
+    hints: ['NTILE(N) 平均分成 N 组', 'PERCENT_RANK 返回百分比排名 0-1'],
+    explanation: '百分位分析用于评估相对位置。NTILE 分箱（四分位），PERCENT_RANK 精确百分比排名。',
+  },
+  {
+    id: 'sql-pivot-1',
+    unitId: 'advanced-sql',
+    title: '行转列 Pivot',
+    description: '统计每个部门中各个职位的员工数量，行转列显示。',
+    difficulty: 'hard',
+    tableSchema: 'employees(id, name, department, position)',
+    setupSQL: `CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, position TEXT NOT NULL);INSERT INTO employees VALUES (1, 'Alice', 'Engineering', 'Senior');INSERT INTO employees VALUES (2, 'Bob', 'Engineering', 'Junior');INSERT INTO employees VALUES (3, 'Charlie', 'Engineering', 'Senior');INSERT INTO employees VALUES (4, 'Diana', 'Marketing', 'Senior');INSERT INTO employees VALUES (5, 'Eve', 'Marketing', 'Junior');INSERT INTO employees VALUES (6, 'Frank', 'Marketing', 'Senior');`,
+    expectedSQL: "SELECT department, SUM(CASE WHEN position = 'Senior' THEN 1 ELSE 0 END) AS senior_count, SUM(CASE WHEN position = 'Junior' THEN 1 ELSE 0 END) AS junior_count FROM employees GROUP BY department;",
+    hints: ['用 CASE WHEN + SUM 做行转列', '每个 CASE WHEN 生成一列'],
+    explanation: '行转列是数据分析面试高频题。用 CASE WHEN 把列值分散成多个列。',
+  },
+  {
+    id: 'sql-funnel-1',
+    unitId: 'advanced-sql',
+    title: '漏斗转化率',
+    description: '计算用户从浏览到点击再到购买的漏斗各步骤转化人数和转化率。',
+    difficulty: 'hard',
+    tableSchema: 'events(event_id, user_id, event, event_time)',
+    setupSQL: `CREATE TABLE events (event_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, event TEXT NOT NULL, event_time TEXT NOT NULL);INSERT INTO events VALUES (1, 1, 'view', '2024-01-01 10:00');INSERT INTO events VALUES (2, 1, 'click', '2024-01-01 10:05');INSERT INTO events VALUES (3, 1, 'purchase', '2024-01-01 10:10');INSERT INTO events VALUES (4, 2, 'view', '2024-01-01 11:00');INSERT INTO events VALUES (5, 2, 'click', '2024-01-01 11:05');INSERT INTO events VALUES (6, 3, 'view', '2024-01-01 12:00');INSERT INTO events VALUES (7, 4, 'view', '2024-01-01 13:00');INSERT INTO events VALUES (8, 4, 'click', '2024-01-01 13:05');`,
+    expectedSQL: "WITH view_users AS (SELECT COUNT(DISTINCT user_id) AS cnt FROM events WHERE event = 'view'), click_users AS (SELECT COUNT(DISTINCT user_id) AS cnt FROM events WHERE event = 'click'), purchase_users AS (SELECT COUNT(DISTINCT user_id) AS cnt FROM events WHERE event = 'purchase') SELECT 'view' AS stage, cnt, 100.0 AS conversion_rate FROM view_users UNION ALL SELECT 'click', cnt, ROUND(cnt * 100.0 / (SELECT cnt FROM view_users), 1) FROM click_users UNION ALL SELECT 'purchase', cnt, ROUND(cnt * 100.0 / (SELECT cnt FROM view_users), 1) FROM purchase_users;",
+    hints: ['漏斗每一层是独立的 COUNT(DISTINCT)', '转化率 = 当前层 / 首层 * 100%'],
+    explanation: '漏斗分析是分析师面试考题中的常客。每层是独立计算的用户去重数。',
+  },
+  {
+    id: 'sql-cohort-1',
+    unitId: 'advanced-sql',
+    title: 'Cohort 留存分析',
+    description: '按首次下单月份分组（同期群），统计每个同期群在各月的活跃用户数。',
+    difficulty: 'hard',
+    tableSchema: 'orders(id, user_id, order_date)',
+    setupSQL: `CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, order_date DATE NOT NULL);INSERT INTO orders VALUES (1, 1, '2024-01-05');INSERT INTO orders VALUES (2, 1, '2024-02-10');INSERT INTO orders VALUES (3, 2, '2024-01-15');INSERT INTO orders VALUES (4, 2, '2024-02-20');INSERT INTO orders VALUES (5, 2, '2024-03-01');INSERT INTO orders VALUES (6, 3, '2024-02-01');INSERT INTO orders VALUES (7, 3, '2024-02-15');INSERT INTO orders VALUES (8, 3, '2024-03-10');INSERT INTO orders VALUES (9, 4, '2024-01-20');`,
+    expectedSQL: "WITH cohort AS (SELECT user_id, STRFTIME('%Y-%m', MIN(order_date)) AS cohort_month FROM orders GROUP BY user_id), activity AS (SELECT user_id, STRFTIME('%Y-%m', order_date) AS order_month FROM orders GROUP BY user_id, order_month) SELECT c.cohort_month AS cohort, COUNT(DISTINCT c.user_id) AS cohort_size, a.order_month, COUNT(DISTINCT a.user_id) AS active_users FROM cohort c LEFT JOIN activity a ON c.user_id = a.user_id GROUP BY c.cohort_month, a.order_month ORDER BY c.cohort_month, a.order_month;",
+    hints: ['CTE1: 先找每个用户首月 cohort', 'CTE2: 再按月统计各用户活跃情况'],
+    explanation: 'Cohort 留存在数据面试中是最高频的 SQL 题。首月分组，按月追踪后续活跃。',
+  },
+]
+
+"""
+
+# Extract the original array content (questions before utility functions)
+before_util = content[:original_end+2]
+
+q_before = before_util.count("id: '")
+print(f"Questions before append: {q_before}")
+
+# Append new questions before the closing ];
+# Remove the trailing `];` of the original array to insert new questions inside
+array_body = before_util.rstrip()
+if array_body.endswith('];'):
+    array_body = array_body[:-2]
+elif array_body.endswith(';'):
+    array_body = array_body[:-1]
+array_body = array_body.rstrip()
+result = array_body + '\n' + new_questions.lstrip() + '\n];\n\n' + util_functions + '\n'
+
+q_after = result.count("id: '")
+print(f"Questions after append: {q_after}")
+
+# Add getQuestionsByUnit
+result += """
+export function getQuestionsByUnit(unitId: string): SQLQuestion[] {
+  return SQL_QUESTIONS.filter((q) => q.unitId === unitId);
+}
+"""
+
+with open('src/data/questions.ts', 'w', encoding='utf-8') as f:
+    f.write(result)
+
+# Verify
+verify_count = result.count("id: '")
+print(f"Final question count: {verify_count}")
+print("Done!")
